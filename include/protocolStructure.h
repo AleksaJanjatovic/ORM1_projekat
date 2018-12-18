@@ -13,7 +13,7 @@ typedef char RPAddr[8];
 //Transfer package used for file transfer
 typedef struct transferPackage_t { 
     RPAddr destAddress[8];
-	RPAddr sourceAddress[8];
+    RPAddr sourceAddress[8];
     char data[PACKAGE_MAX_SIZE];
     struct sockaddr_in sourceHost;
     struct sockaddr_in destinationHost;
@@ -21,7 +21,7 @@ typedef struct transferPackage_t {
 
 //routerPackage exchanged periodically between routers 
 typedef struct routerPackage_t {
-	char destAddress[8];
+	RPAddr destAddress[8];
 	int routerTable[256][256];
 	struct sockaddr_in sourceHost;
 	struct sockaddr_in destinationHost;	
