@@ -10,7 +10,7 @@
 //	hhh is the host number uniquelly defined for each host in router's subnet	
 typedef char RPAddr[8];
 
-//Transfer package generated when user sends data via the routerProtocol command
+//Transfer package used for file transfer
 typedef struct transferPackage_t { 
     RPAddr destAddress[8];
 	RPAddr sourceAddress[8];
