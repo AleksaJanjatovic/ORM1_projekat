@@ -6,7 +6,7 @@
 #define MAXUSERS 255
 #define MAXROUTERS 100//maksimalni indeks rutera
 #define CONVBUFFSIZETP PACKAGEMAX+35
-#define REFRESHVALUE 255
+#define REFRESHVALUE 5
 #define ROUTERBUFFER MAXROUTERS*MAXROUTERS
 //RPAddr represents the Routing Protocol address in the following form
 //"rrr.hhh"
@@ -20,7 +20,8 @@ typedef struct userModel_t {
     RPAddress userAddress;
     struct sockaddr_in userHost;
     struct sockaddr_in homeHost;
-    unsigned char transferBuffer[CONVBUFFSIZETP];
+    unsigned char sendTPBuffer[CONVBUFFSIZETP];
+    unsigned char recieveTPBuffer[CONVBUFFSIZETP];
     int socket;
 }userModel;
 
@@ -36,19 +37,17 @@ typedef struct transferPackage_t {
 typedef struct routerModel_t{
     RPAddress routerAddress;
     unsigned char routerTable[MAXROUTERS][MAXROUTERS]; // 0 pozicija prve kolone predstavlja broj komsija svakog rutera
-    pthread_mutex_t rT_mutex;
-    unsigned char transferBuffer[CONVBUFFSIZETP];
-    unsigned char receiveTableBuffer[ROUTERBUFFER];
+    pthread_mutex_t routerTableMutex;
+    unsigned char receiveBuffer[ROUTERBUFFER];
     unsigned char sendTableBuffer[ROUTERBUFFER];
+    unsigned char sendTPBuffer[CONVBUFFSIZETP];
 
     unsigned char users[MAXUSERS]; // svaki ruter moze da poseduje maskimalno 255 hostova // hostovi su na pocetku inicijalizovani na 0, na nultoj poziciji je broj user hostova
     struct sockaddr_in userHosts[MAXUSERS];
 
-    int socketTable; //Broadcast soket za razmenu tabela
-    int socketTransferPackage; //soket za razmenu paketa
+    int socket; //Broadcast soket za razmenu tabela
 
     struct sockaddr_in routerHosts[MAXROUTERS];
-    struct sockaddr_in homeTableHost;
     struct sockaddr_in homeHost;
 }routerModel;
 
