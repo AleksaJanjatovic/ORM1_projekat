@@ -6,32 +6,32 @@
 
 int main(int argc, char * argv[]) {
     routerModel rm;
+    if(argc < 6) {
+        //printf("Not enough arguments passed");
+        return -1;
+    }
     routerModel destRouter;
     RPAddress dummy;
 
     initRM(atoi(argv[1]), argv[2], argv[3], &rm, 0);
     initRM(atoi(argv[4]), argv[5], dummy, &destRouter, 1);
     connectRMToNetwork(&rm, &destRouter);
-//    pthread_t tp_parsing, map_control;
-   pthread_t recv_map, tp_parse;
-//    pthread_create(&tp_parsing, NULL, (void*)parseTP, &rm);
-//    pthread_create(&map_routing, NULL, (void*)routerTableTimeControl, &rm);
-  // printf("Pravljenje thread-a\n");
-   pthread_create(&recv_map, NULL, (void*)receiveRouterTable, &rm);
-   pthread_create(&tp_parse, NULL, (void*)parseTP, &rm);
-
-   // printf("Pravljenje thread-a je probelm\n");
+    pthread_t dataParsing, routerTableControl;
+    ////printf("Pravljenje threada\n");
+//    //printf("Greksa: %d\n", parseTP(&rm));
+    pthread_create(&dataParsing, NULL, (void*)parseReceivedData, &rm);
+    //pthread_join(dataParsing, NULL);
+   // //printf("Pravljenje thread-a je probelm\n");
    while(1) {
         routerTableTimeControl(&rm);
 //        routerTableTimeControl(&rm);
-        sendRouterTable(&rm);
+//        //printRouterTable(&rm);
+//        //printRouterModel(&rm);
 //        printRouterTable(&rm);
-//        printRouterModel(&rm);
-        printRouterTable(&rm);
-        usleep(1000000);
-    }
+         usleep(20000);
+   }
 
-    //printRouterModel(&rm);
+    ////printRouterModel(&rm);
 
 //    char finished = 0;
 //    rm.routerTable[1][0] = 2;
@@ -64,7 +64,7 @@ int main(int argc, char * argv[]) {
 //    path[0] = 9;
 //    findPath(9, 7, &rm, path, &nodeNum, &finished);
 //    for(int i = 0; i <= nodeNum; i++) {
-//        printf("Path member %d is router %d\n", i,path[i]);
+//        //printf("Path member %d is router %d\n", i,path[i]);
 //    }
 
     return 0;

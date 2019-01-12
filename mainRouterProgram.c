@@ -5,25 +5,28 @@
 #include <pthread.h>
 
 int main(int argc, char * argv[]) {
+    if(argc < 4) {
+        //printf("Not enough arguments passed");
+        return -1;
+    }
     routerModel rm;
     initRM(atoi(argv[1]), argv[2], argv[3], &rm, 0);
-    //printRouterModel(&rm);
-    pthread_t tp_parsing, map_routing, map_recv;
-    //printf("Pravljenje threada\n");
-//    printf("Greksa: %d\n", parseTP(&rm));
-    pthread_create(&tp_parsing, NULL, (void*)parseTP, &rm);
-    pthread_create(&map_recv, NULL, (void*)receiveRouterTable, &rm);
+    ////printRouterModel(&rm);
+    pthread_t dataParsing;
+    ////printf("Pravljenje threada\n");
+//    //printf("Greksa: %d\n", parseTP(&rm));
+    pthread_create(&dataParsing, NULL, (void*)parseReceivedData, &rm);
 //    pthread_join(tp_parsing, NULL);
     while(1) {
         routerTableTimeControl(&rm);
-        sendRouterTable(&rm);
-        printRouterTable(&rm);
-        usleep(1000000);
+        //sendRouterTable(&rm);
+//        printRouterTable(&rm);
+        usleep(20000);
     }
 //    while(1) {
 //        routerTableTimeControl(&rm);
 //        sendRouterTable(&rm);
-//        printRouterTable(&rm);
+//        //printRouterTable(&rm);
 //        usleep(1000000);
 //    }
 //    for(int i = 0; i < 10; i++) {
@@ -68,7 +71,7 @@ int main(int argc, char * argv[]) {
 //    path[0] = 9;
 //    findPath(9, 7, &rm, path, &nodeNum, &finished);
 //    for(int i = 0; i <= nodeNum; i++) {
-//        printf("Path member %d is router %d\n", i,path[i]);
+//        //printf("Path member %d is router %d\n", i,path[i]);
 //    }
     closeRM(&rm);
     return 0;
