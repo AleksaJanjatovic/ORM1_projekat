@@ -5,8 +5,8 @@
 #define PACKAGEMAX 800
 #define MAXUSERS 255
 #define MAXROUTERS 100//maksimalni indeks rutera
-#define CONVBUFFSIZETP PACKAGEMAX+35
-#define REFRESHVALUE 5
+#define CONVBUFFSIZETP PACKAGEMAX+MAXROUTERS+35
+#define REFRESHVALUE 100
 #define ROUTERBUFFER MAXROUTERS*MAXROUTERS
 //RPAddr represents the Routing Protocol address in the following form
 //"rrr.hhh"
@@ -29,8 +29,11 @@ typedef struct transferPackage_t {
     RPAddress destinationAddress;
     RPAddress sourceAddress;
     char data[PACKAGEMAX];
+    unsigned char path[CONVBUFFSIZETP];
+    unsigned char nodeNum;
     unsigned short dataSent;
-    char packageType; //packageType = 0 za podatke, packageTpye = 1 za konekciju korisnika, packageType = 2 za konekciju rutera
+    char packageType; //packageType = 0 za podatke, packageTpye = 1 za konekciju korisnika, packageType = 2 za konekciju rutera,
+    //packageType = 3 za response
 }transferPackage;
 //router
 

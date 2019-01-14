@@ -1,13 +1,13 @@
 #include <stdio.h>
 #include "protocolStructure.h"
 
-void //printRouterModel(routerModel * rm) {
-    //printf("Router model specifications: \n");
-    //printf("Router RPAddress: %s\n", rm->routerAddress);
+void printRouterModel(routerModel * rm) {
+    printf("Router model specifications: \n");
+    printf("Router RPAddress: %s\n", rm->routerAddress);
     int i;
     for(i = 1; i < MAXUSERS; i++) {
         if(rm->users[i]) {
-            //printf("Router user %d present\n", i);
+            printf("Router user %d present\n", i);
         }
     }
 //            typedef struct routerModel_t{
@@ -29,26 +29,33 @@ void //printRouterModel(routerModel * rm) {
 //            }routerModel;
 }
 
-void //printUserModel(userModel * um) {
-    //printf("User model specifications: \n");
-    //printf("User RPAdress: %s\n", um->userAddress);
+void printUserModel(userModel * um) {
+    printf("User model specifications: \n");
+    printf("User RPAdress: %s\n", um->userAddress);
 }
 
-void //printRouterTable(routerModel * rm) {
-    int i,j;
+void printRouterTable(routerModel * rm) {
+    unsigned char i,j;
     for(i = 0; i < MAXROUTERS/5; i++) {
-        //printf("%d: ", i);
+        printf("%d: ", i);
         for(j = 0; j < MAXROUTERS/5; j++) {
-            //printf("%d ", rm->routerTable[i][j]);
+            printf("%d ", rm->routerTable[i][j]);
         }
-        //printf("\n");
+        printf("\n");
     }
 }
 
-void //printTPPackage(transferPackage * tp) {
-    //printf("Transfer package specifications: \n");
-    //printf("Source address %s\n", tp->sourceAddress);
-    //printf("Destination address %s\n", tp->destinationAddress);
-    //printf("Data sent: %d\n", tp->dataSent);
-    //printf("Pacakge type: %d\n", tp->packageType);
+void printTPPackage(transferPackage * tp) {
+    printf("Transfer package specifications: \n");
+    printf("Source address %s\n", tp->sourceAddress);
+    printf("Destination address %s\n", tp->destinationAddress);
+    printf("Data sent: %d\n", tp->dataSent);
+    printf("Path: ");
+    int i;
+    for(i = 0; i < MAXROUTERS; i++) {
+        printf("%d ", tp->path[i]);
+    }
+    printf("\n");
+    printf("Number of nodes: %d\n", tp->nodeNum);
+    printf("Pacakge type: %d\n", tp->packageType);
 }
