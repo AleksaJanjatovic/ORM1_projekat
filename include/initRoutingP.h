@@ -4,17 +4,59 @@
 #include "sys/types.h"
 #include "../include/protocolStructure.h"
 
-//UDPinitTP initializes the UDP members of a transferPackage structure (more particularly, the sourceHost and destinationHost sockaddr_in members)
-//Also, this function creates a socket, so that the user of the Router Protocol does not have to manage them
-//The first argument is Port Number, the second argument is the IP, the third argument is the actual transferPackage
+
+/**
+ * @brief initUM: Function initializes the userModel
+ * @param portNumber: target port number
+ * @param ipAddress: target IP address
+ * @param um: userModel passed for initialization
+ * @return negative numbers in case of an error, otherwise 0
+ */
 int initUM(unsigned int portNumber, char ipAddress[16], userModel* um);
+
+
+/**
+ * @brief connectUMToNetwork: Function connects userModel to target router
+ * @param user: userModel passed for connection
+ * @param destRouter: routerModel that user connects to
+ * @return negative numbers in case of an error, otherwise 0
+ */
 int connectUMToNetwork(userModel * user, routerModel * destRouter);
-//UDPinitRP initializes the UDP members of a routerPackage structure
-//Also, this function creates a socket, so that the user of the Router Protocol does not have to manage them
-//The first argument is Port Number, the second argument is the IP, the third argument is the actual routerPackage (more particularly, the destinationHost sockaddr_in)
-int initRM(unsigned int portNumber, char ipAddress[16], RPAddress rpAddress, routerModel* rm, char userInitialisation);
+
+
+/**
+ * @brief initRM: Function initializes the routerModel
+ * @param portNumber: target port number
+ * @param ipAddress: target ip address
+ * @param rpAddress: target RPAddres (note that this address must not be used by other routers in the network)
+ * @param rm: routerModel passed for initialization
+ * @return negative numbers in case of error, otherwise 0
+ */
+int initRM(unsigned int portNumber, char ipAddress[16], RPAddress rpAddress, routerModel* rm);
+
+
+/**
+ * @brief connectRMToNetwork: Funtion connects routerModel to anotherRouter (this can be called multiple times, each time with a different destRouter)
+ * @param sourceRouter: routerModel passed for connection
+ * @param destRouter: routerModel passed as a connection destination
+ * @return negative numbers in case of error, otherwise 0
+ */
 int connectRMToNetwork(routerModel * sourceRouter, routerModel * destRouter);
+
+
+/**
+ * @brief closeUM: Function that closes the userModel socket
+ * @param um: target userModel
+ * @return negative numbers in case of an error, otherwise 0
+ */
 int closeUM(userModel* um);
+
+
+/**
+ * @brief closeRM: Function that closes the routerModel socket and destroys routerTableMutex
+ * @param rm: target routerModel
+ * @return negative numbers in case of an error, otherwise 0
+ */
 int closeRM(routerModel* rm);
 
 #endif
