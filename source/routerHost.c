@@ -1,44 +1,34 @@
 #include "../include/routerHost.h"
 #include "../include/initRoutingP.h"
 #include "../include/utilityFun.h"
+#include "../include/debugging.h"
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
-
-void convertRTableToArray(routerModel * rm, unsigned char array[ROUTERBUFFER]);
-void convertArrayToRTable(unsigned char array[ROUTERBUFFER], routerModel * rm);
-void parseRouterTable(routerModel * rm);
-void findPath(unsigned char currentRouter, unsigned char destRouter, routerModel * rt, unsigned char path[MAXROUTERS], unsigned char * nodeNum, char * finished);
-void shiftNeighbours(unsigned char array[MAXROUTERS]);
-int sendRouterTable(routerModel * rm);
-int parseTP(routerModel * rm, struct sockaddr_in * recv_address);
-
-int sendRouterTable(routerModel * rm) { // ova funkcija ide u tajmer
-
-    unsigned char thisRouter = getRouterNumber(rm->routerAddress);
-    int i, neighbourNumber = rm->routerTable[getRouterNumber(rm->routerAddress)][0];
-
-    convertRTableToArray(rm, rm->sendTableBuffer);
-    pthread_mutex_unlock(&rm->routerTableMutex);
-    for(i = 1; i <= neighbourNumber; i++){ // u sledecim redovima je negde segfault
-        if(sendto(rm->socket, rm->sendTableBuffer, ROUTERBUFFER, 0,
-    (struct sockaddr *)&(rm->routerHosts[rm->routerTable[thisRouter][i]]), (socklen_t)sizeof(struct sockaddr_in)) == -1) { //salje se na svaki ruter
-            //perror("RouterTable sending error");
-        }
-        //printf("Router table sent to router %d\n", rm->routerTable[thisRouter][i]);
-    }
-
-    return 0;
-}
 
 void convertRTableToArray(routerModel * rm, unsigned char array[ROUTERBUFFER]) {
     int a = 0, i, j;
     for(i = 0; i < MAXROUTERS; i++) { //preskacemo prvi red
         for(j = 0; j < MAXROUTERS; j++) {
-            //if(j == 0) ////printf("Router table neighbour number %d\n", rm->routerTable[i][j]);
             array[a++] = rm->routerTable[i][j];
         }
     }
+}
+
+int sendRouterTable(routerModel * rm) {
+
+    unsigned char thisRouter = getRouterNumber(rm->routerAddress);
+    unsigned char i;
+
+    convertRTableToArray(rm, rm->sendTableBuffer);
+    for(i = 1; i <= rm->routerTable[thisRouter][0]; i++){ // u sledecim redovima je negde segfault
+        if(sendto(rm->socket, rm->sendTableBuffer, ROUTERBUFFER, 0,
+    (struct sockaddr *)&(rm->routerHosts[rm->routerTable[thisRouter][i]]), (socklen_t)sizeof(struct sockaddr_in)) == -1) { //salje se na svaki ruter
+            perror("ERROR! RouterTable sending error");
+        }
+    }
+
+    return 0;
 }
 
 void convertArrayToRTable(unsigned char array[ROUTERBUFFER], routerModel * rm) {
@@ -50,18 +40,24 @@ void convertArrayToRTable(unsigned char array[ROUTERBUFFER], routerModel * rm) {
         }
     }
     for(i = 1; i < MAXROUTERS; i++) {
-        if(array[a] > rm->routerTable[i][0]){ //Ako je  broj komsija primljenog paketa veci od broja komsija trenutnog onda popuni
+        if(array[a] > rm->routerTable[i][0]){ //Asking if received table has more neighbour routers
             rm->routerTable[i][0] = array[a++];
-            ////printf("Neighbour router value: %d\n", array[a-1]);
             for(j = 1; j < MAXROUTERS; j++) {
                 rm->routerTable[i][j] = array[a++];
             }
         } else {
-            a += MAXROUTERS; // ako je nula preskoci citav taj red posto nema potrebe da se popunjava
+            a += MAXROUTERS; //Skipping an entire row of a router table if the upper is not the case
         }
     }
 }
 
+void parseRouterTable(routerModel * rm) {
+    pthread_mutex_lock(&rm->routerTableMutex);
+
+    convertArrayToRTable(rm->receiveBuffer, rm); //Updating our router table
+
+    pthread_mutex_unlock(&rm->routerTableMutex);
+}
 
 void shiftNeighbours(unsigned char array[MAXROUTERS]) {
     int zero_indx = 1;
@@ -77,31 +73,28 @@ void shiftNeighbours(unsigned char array[MAXROUTERS]) {
     }
 }
 
-//Ovo se poziva pre nego sto se sam ruterPridruzi mrezi
 void routerTableTimeControl(routerModel * rm) {
-    //while(1) {
+    while(1) {
         int i,j,k;
         pthread_mutex_lock(&rm->routerTableMutex);
         rm->routerTable[0][getRouterNumber(rm->routerAddress)] = REFRESHVALUE; //stavljanje refresh counter-a na 20
         for(i = 1; i < MAXROUTERS; i++) {
-            if(rm->routerTable[0][i]) {
-                rm->routerTable[0][i]--; // uslovna kontrola smanjuje svaki put dok ne dodje do 0
-                //////printf("%d\n", rm->routerTable[0][i]);
-            } else { // brisemo red
-                if(rm->routerTable[i][0]) { //ako je broj komsija vec jednak nuli, onda je taj red vec obrisan pa ne moramo da prolazimo kroz ovo
+            if(rm->routerTable[0][i]) { //Asking if table counters are not zero
+                rm->routerTable[0][i]--;
+            } else { //If upper is not the case, then we remove the outdated router
+                if(rm->routerTable[i][0]) { //Asking if router i has any neighbours
                     for(j = 1; j <= rm->routerTable[i][0]; j++) {
-                       rm->routerTable[i][j] = 0; //brisanje tog reda u potpunosti
+                       rm->routerTable[i][j] = 0; //Deleting an entire row of the removing router
                     }
                     rm->routerTable[i][0] = 0;
 
-                    for(j = 1; j < MAXROUTERS; j++) { //proveravamo za svaki ruter da li poseduju uklonjenog rutera
-                        if(rm->routerTable[j][0]) { // ovo radimo jedino ako je broj suseda razlicit od nule
+                    for(j = 1; j < MAXROUTERS; j++) { //Checking if other routers have the removed router as a neighbour
+                        if(rm->routerTable[j][0] && i != j) { //Skipping routers that are not in the network (that have 0 neighbours)
                             for(k = 1; k <= rm->routerTable[j][0]; k++) {
                                 if(rm->routerTable[j][k] == i) {
-                                        shiftNeighbours(rm->routerTable[j]);
-                                        ////printf("Smanjivanje broja suseda od rutera %d\n zato sto je na poziciji %d pronadjen %d", j, k, i);
-                                        (rm->routerTable[j][0])--;
                                         rm->routerTable[j][k] = 0;
+                                        shiftNeighbours(rm->routerTable[j]); //Shifting the other neighbour routers to the left
+                                        rm->routerTable[j][(rm->routerTable[j][0])--] = 0;
                                         break;
                                 }
                             }
@@ -111,153 +104,112 @@ void routerTableTimeControl(routerModel * rm) {
                 }
             }
         }
-        sendRouterTable(rm);
+        sendRouterTable(rm); //Broadcasting the updated router table
         pthread_mutex_unlock(&rm->routerTableMutex);
-        usleep(20000);
-    //}
+        usleep(RTABLEREFRESHRATE);
+    }
 }
 
+int findPath(unsigned char currentRouter, unsigned char destRouter, routerModel * rm, unsigned char path[MAXROUTERS], unsigned char * nodeNum, char * finished) {
+    path[(*nodeNum)++] = currentRouter;
+    unsigned char i,j;
+    char routerAlreadyInPath;
 
-void findPath(unsigned char currentRouter, unsigned char destRouter, routerModel * rm, unsigned char path[MAXROUTERS], unsigned char * nodeNum, char * finished) {
-//    int numOfcurrentRouter = 0; // broj susednih rutera
-//    int wrongPath;
-//    for(unsigned char i = 1; i != 0; i++) {
-//        if(!(*finished)) {
-//            wrongPath = 0;
-//            if(rt->routerTable[currentRouter][i]) {
-//                ++numOfcurrentRouter;
-//                if(i == destRouter) {
-//                    path[*nodeNum] = destRouter; //
-//                    *finished = 1;
-//                    return;
-//                } else {
-//                    for(int j = 0; j < *nodeNum; j++) {
-//                        if(path[j] == i) { //moramo proveriti da li smo vec kopali po trenutnom ruteru
-//                            --numOfcurrentRouter;
-//                            wrongPath = 1;
-//                            break;
-//                        }
-//                    }
-//                    if(!wrongPath) {
-//                        path[(*nodeNum)++] = i;
-//                        findPath(i, destRouter, rt, path, nodeNum, finished);
-//                    }
-//                }
-//            }
-//        }
-
-//    }
-//    if(!numOfcurrentRouter && !(*finished)) {
-//        path[(*nodeNum)--] = 0;
-//    }
-    printf("Poziv za ruter %d\n", currentRouter);
-    int numOfcurrentRouter = 0; // broj susednih rutera
-    int wrongPath;
-    unsigned char i, j;
-    for(i = 1; i <= rm->routerTable[currentRouter][0]; i++) {
+    for(i = 1; i <= rm->routerTable[currentRouter][0]; i++) { //Pass through all neighbouring routers
         if(!(*finished)) {
-            wrongPath = 0;
-            if(rm->routerTable[currentRouter][i]) {
-                ++numOfcurrentRouter;
-                if(rm->routerTable[currentRouter][i] == destRouter) {
-                    path[*nodeNum] = destRouter; //
-                    *finished = 1;
-                    return;
-                } else {
-                    for(j = 1; j < *nodeNum; j++) {
-                        if(path[j] == rm->routerTable[currentRouter][i]) { //moramo proveriti da li smo vec kopali po trenutnom ruteru
-                            wrongPath = 1;
-                            break;
-                        }
-                    }
-                    if(!wrongPath) {
-                        path[(*nodeNum)++] = rm->routerTable[currentRouter][i];
-                        printf("Poziv rekurzije za %d\n", rm->routerTable[currentRouter][i]);
-                        findPath(rm->routerTable[currentRouter][i], destRouter, rm, path, nodeNum, finished);
-                    }
+
+            routerAlreadyInPath = 0;
+            for(j = 0; j < *nodeNum; j++) {
+                if(path[j] == rm->routerTable[currentRouter][i]) { //Checking if the current router is already in path
+                    routerAlreadyInPath = 1;
+                    break;
                 }
             }
-        } else {
-            return;
-        }
 
+            if(!routerAlreadyInPath) { //If the current router is not in the path
+                if(rm->routerTable[currentRouter][i] == destRouter) { //Check if we found the destination router
+                    *finished = 1; //Set the end flag
+                    path[*nodeNum] = destRouter;
+                    return 0;
+                } else {
+                    findPath(rm->routerTable[currentRouter][i], destRouter, rm, path, nodeNum, finished); //Otherwise search deeper into the network
+                }
+            }
+
+        } else {
+            return 0;
+        }
     }
-    if(!(*finished)) {
-        printf("Brisanje clana %d\n", path[(*nodeNum) - 1]);
-        path[(*nodeNum)--] = 0;
+    if(!*finished) {
+        path[--(*nodeNum)] = 0;
     }
+    return -1;
 }
 
-int parseReceivedData(routerModel * rm) {
-    struct sockaddr_in recv_address;
-    unsigned short byteNum;
-    size_t len = sizeof(struct sockaddr_in);
-    while(1) {
-        //////printf("Tp parssed\n");
-        if(memset(&recv_address, 0, sizeof(struct sockaddr_in)) == 0) {
-            perror("Wrong memory: ");
-            return -1;
-        }
-        //////printf("POsle ovoga je greska\n");
-        if((byteNum = recvfrom(rm->socket, rm->receiveBuffer, ROUTERBUFFER, 0, (struct sockaddr *)&recv_address, (socklen_t*)&len)) == -1) {
-            perror("Message not recieved: ");
-            return -2;
-        } else if(byteNum == ROUTERBUFFER) {
-            //printf("Parsing router table. Recieved data size was %d\n", byteNum);
-            parseRouterTable(rm);
-        } else if(byteNum == CONVBUFFSIZETP) {
-            //printf("Parsing transfer package. Recieved data size was %d\n", byteNum);
-            parseTP(rm, &recv_address);
+int sendTPToNextRouter(routerModel * rm, transferPackage * tp) {
+    unsigned char i;
+    unsigned char thisRouter = getRouterNumber(rm->routerAddress);
+    char nextRouterPresent = 0, finished = 0;
+
+    pthread_mutex_lock(&rm->routerTableMutex);
+
+    for(i = 1; i <= rm->routerTable[thisRouter][0]; i++) { //Checking if the router is present among neighbouring routers
+        if(rm->routerTable[thisRouter][i] == tp->path[tp->currentNode + 1] && tp->nodeNum) {
+            nextRouterPresent = 1;
+            break;
         }
     }
+
+    if(!nextRouterPresent) { //If not, then create a new path
+        memset(tp->path, 0, MAXROUTERS);
+        tp->currentNode = 0;
+        tp->nodeNum = 0;
+        if(findPath(thisRouter, getRouterNumber(tp->destinationAddress), rm, tp->path, &tp->nodeNum, &finished)) {
+            printf("ERROR! No valid path found from this router!\n");
+        }
+    }
+
+    tp->currentNode++;
+
+    convertTPackageToArray(tp, rm->sendTPBuffer);
+
+    //Sending the package to the next router in the path
+    if(sendto(rm->socket, rm->sendTPBuffer, CONVBUFFSIZETP, 0,
+              (struct sockaddr*)&(rm->routerHosts[tp->path[tp->currentNode]]), (socklen_t)sizeof(struct sockaddr_in)) == -1) {
+        perror("ERROR! Send to next router failed");
+        return -5;
+    }
+
+    pthread_mutex_unlock(&rm->routerTableMutex);
 }
 
 int parseTP(routerModel * rm, struct sockaddr_in * recv_address) {
     transferPackage tp;
     convertArrayToTPackage(rm->receiveBuffer, &tp);
+
     unsigned char path[MAXROUTERS];
     unsigned char thisRouter = getRouterNumber(rm->routerAddress);
     unsigned char destinationRouter = getRouterNumber(tp.destinationAddress);
+    unsigned char receivingUser = getUserNumber(tp.destinationAddress);
+    unsigned char otherRouter, i, pathFinished = 0;
     size_t len = sizeof(struct sockaddr_in);
-    unsigned char i;
-    char pathFinished = 0;
+
     switch(tp.packageType) {
-        case 0: // prosledjivanje paketa
-            printf("Transfer package passed\n");
-            convertTPackageToArray(&tp, rm->sendTPBuffer);
-            if(destinationRouter == thisRouter) {
-                if(rm->users[destinationRouter] != 0) {
-                    if(sendto(rm->socket, rm->sendTPBuffer, CONVBUFFSIZETP, 0, (struct sockaddr *)&(rm->userHosts[destinationRouter]), sizeof(struct sockaddr_in)) == -1)  {
-                        return -4;
-                    }
-                } else {
-                    printf("This router doesn't have that user!\n");
+        case 0: //Accepting and sending a network package
+            printTPackage(&tp);
+
+            if(thisRouter == destinationRouter) {
+                convertTPackageToArray(&tp, rm->sendTPBuffer);
+                if(sendto(rm->socket, rm->sendTPBuffer, CONVBUFFSIZETP, 0, (struct sockaddr*)&rm->userHosts[receivingUser], (socklen_t)sizeof(struct sockaddr_in)) == -1) {
+                    perror("ERROR! Message not sent to user");
+                    return -1;
                 }
             } else {
-                unsigned char nodeNum = 0;
-
-                for(i = 1; i < MAXROUTERS; i++) {
-                    path[i] = 0;
-                }
-                if(thisRouter == destinationRouter) {
-                    path[1] = destinationRouter;
-                } else {
-                    pthread_mutex_lock(&(rm->routerTableMutex));
-                    findPath(thisRouter, destinationRouter, rm, path, &nodeNum, &pathFinished);
-                    pthread_mutex_unlock(&(rm->routerTableMutex));
-                }
-                if(!path[0]) { //ako imamo putanju do rutera, onda ce path[0] biti razlicito od 0
-                    printf("No valid path to this router %d\n", destinationRouter);
-                } else {
-
-                    if(sendto(rm->socket, rm->sendTPBuffer, CONVBUFFSIZETP, 0, (struct sockaddr *)&(rm->routerHosts[path[0]]), sizeof(struct sockaddr_in)) == -1) {\
-                        return -3;
-                    }
-                }
+                sendTPToNextRouter(rm, &tp);
             }
+            printTPackage(&tp);
         break;
-        case 1:
-            printf("User connection package passed\n");
+        case 1: //Accepting a user connection package
             for(i = 1; i < MAXUSERS; i++) {
                 if(!(rm->users[i])) {
                     rm->users[i] = 1;
@@ -267,24 +219,23 @@ int parseTP(routerModel * rm, struct sockaddr_in * recv_address) {
             rm->userHosts[i].sin_addr.s_addr = recv_address->sin_addr.s_addr;
             rm->userHosts[i].sin_family = AF_INET;
             rm->userHosts[i].sin_port = recv_address->sin_port;
-            setRouterNumber(getRouterNumber(rm->routerAddress), tp.sourceAddress); // u ove dve linije ruter dodeljuje RPadresu useru
-            printf("Postavljanje vrednosti usera%d\n", i);
+            setRouterNumber(thisRouter, tp.sourceAddress);
             setUserNumber(i, tp.sourceAddress);
 
-            convertTPackageToArray(&tp, rm->sendTPBuffer);
+            printf("User %d connected to this router\n", i);
+
+            convertTPackageToArray(&tp, rm->sendTPBuffer); //Sending the user number back to the user
             if(sendto(rm->socket, rm->sendTPBuffer, CONVBUFFSIZETP, 0, (struct sockaddr *)&(rm->userHosts[i]), sizeof(struct sockaddr_in)) == -1) {
                 return -1;
             }
 
-            printRouterModel(rm);
-
         break;
-        case 2:;
-            //printf("Router connection package passed\n");
-            unsigned char otherRouter = getRouterNumber(tp.sourceAddress);
+        case 2: //Accepting a router connection package
+            otherRouter = getRouterNumber(tp.sourceAddress);
 
             pthread_mutex_lock(&rm->routerTableMutex);
-            for(i = 1; i <= rm->routerTable[thisRouter][0]; i++) {
+
+            for(i = 1; i <= rm->routerTable[thisRouter][0]; i++) { //Checking if received router address is already taken
                 if(rm->routerTable[thisRouter][i] == otherRouter)  {
                     i = -1;
                     break;
@@ -298,32 +249,71 @@ int parseTP(routerModel * rm, struct sockaddr_in * recv_address) {
                 rm->routerHosts[otherRouter].sin_port = recv_address->sin_port;
                 rm->routerHosts[otherRouter].sin_family = AF_INET;
                 setRouterNumber(thisRouter, tp.sourceAddress);
-                //printf("This router addres set to sent %d\n", thisRouter);
+                printf("Router %d connected to this router\n", otherRouter);
             } else {
-                setRouterNumber(0, tp.sourceAddress); // Saljemo mu adresu 000.000 nazad ako je adresa vec zauzeta
+                setRouterNumber(0, tp.sourceAddress); //Setting the returning router address to 0 if the address is already taken
             }
+
             pthread_mutex_unlock(&rm->routerTableMutex);
 
-            setUserNumber(0, tp.sourceAddress); //popunjavamo doji deo adrese
-            convertTPackageToArray(&tp, rm->sendTPBuffer);
+            setUserNumber(0, tp.sourceAddress); //The user number of a router RPAddress has to be 0
 
-            //printf("Sending package to %d\n", otherRouter);
-            if(sendto(rm->socket, rm->sendTPBuffer, CONVBUFFSIZETP, 0, (struct sockaddr *)&rm->routerHosts[otherRouter], (socklen_t)sizeof(struct sockaddr_in)) == -1) { //posalji drugom ruteru svoju adresu
+            tp.packageType = 3; //Router connection response package
+            convertTPackageToArray(&tp, rm->sendTPBuffer);
+            if(sendto(rm->socket, rm->sendTPBuffer, CONVBUFFSIZETP, 0, // Sending the response package back to router
+                      (struct sockaddr *)&rm->routerHosts[otherRouter], (socklen_t)sizeof(struct sockaddr_in)) == -1) {
                 return -2;
             }
-            //printf("Response package sent\n");
-            ////printRouterModel(rm);
-            ////printRouterTable(rm);
+
+        break;
+        case 3: //Accepting a router connection RESPONSE package
+            convertArrayToTPackage(rm->receiveBuffer, &tp);
+
+            if(!strcmp(tp.sourceAddress,  "000.000")) {
+                return -8;
+            }
+
+            thisRouter = getRouterNumber(rm->routerAddress);
+            otherRouter = getRouterNumber(tp.sourceAddress); //The returned RPAddress of the router this router connected to
+
+            pthread_mutex_lock(&rm->routerTableMutex);
+
+            rm->routerTable[0][thisRouter] = REFRESHVALUE; //Refreshing the table counter values of our routers
+            rm->routerTable[0][otherRouter] = REFRESHVALUE;
+            rm->routerTable[thisRouter][++rm->routerTable[thisRouter][0]] = otherRouter;
+            rm->routerHosts[otherRouter].sin_addr.s_addr = recv_address->sin_addr.s_addr;
+            rm->routerHosts[otherRouter].sin_port = recv_address->sin_port;
+            rm->routerHosts[otherRouter].sin_family = AF_INET;
+
+            pthread_mutex_unlock(&rm->routerTableMutex);
+
+            printf("Router %d succesfully connected to router %d\n", thisRouter, otherRouter);
         break;
         default:
-            //printf("Wrong package type\n");
+            printf("ERROR! Wrong package type!\n");
         break;
     }
 }
 
-void parseRouterTable(routerModel * rm) {
-    pthread_mutex_lock(&rm->routerTableMutex);
-    convertArrayToRTable(rm->receiveBuffer, rm);
-    ////printf("Router table received\n");
-    pthread_mutex_unlock(&rm->routerTableMutex);
+int parseReceivedData(routerModel * rm) {
+    struct sockaddr_in recv_address;
+    unsigned short byteNum = 0;
+    size_t len = sizeof(struct sockaddr_in);
+
+    while(1) {
+        if(memset(&recv_address, 0, sizeof(struct sockaddr_in)) == 0) { //
+            printf("ERROR! recv_address memory fault in parseReceivedData!");
+            return -1;
+        }
+
+        if((byteNum = recvfrom(rm->socket, rm->receiveBuffer, ROUTERBUFFER, 0, (struct sockaddr *)&recv_address, (socklen_t*)&len)) == -1) {
+            perror("Message not recieved: ");
+            return -2;
+        } else if(byteNum == ROUTERBUFFER) {
+            parseRouterTable(rm);
+        } else if(byteNum == CONVBUFFSIZETP) {
+            parseTP(rm, &recv_address);
+        }
+        byteNum = 0;
+    }
 }
