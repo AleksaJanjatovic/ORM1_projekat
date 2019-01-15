@@ -1,14 +1,10 @@
 #!/bin/bash
-echo "mainRouterProgram BEGIN"
-gcc -pthread -o mainRouterProgram mainRouterProgram.c source/initRoutingP.c source/userHost.c source/utilityFun.c source/protocolStructure.c source/routerHost.c include/debugging.h
-echo "mainRouterProgram END"
-echo "*********************************************************************"
 echo "routerProgram BEGIN"
-gcc -pthread -o routerProgram routerProgram.c source/initRoutingP.c source/userHost.c source/utilityFun.c source/protocolStructure.c source/routerHost.c include/debugging.h
+gcc -pthread -o routerProgram routerProgram.c source/initRoutingP.c source/userHost.c source/utilityFun.c source/protocolStructure.c source/routerHost.c source/debugging.c
 echo "routerProgram END"
 echo "*********************************************************************"
 echo "userProgram BEGIN"
-gcc -pthread -o userProgram userProgram.c source/initRoutingP.c source/userHost.c source/utilityFun.c source/protocolStructure.c source/routerHost.c include/debugging.h
+gcc -pthread -o userProgram userProgram.c source/initRoutingP.c source/userHost.c source/utilityFun.c source/protocolStructure.c source/routerHost.c source/debugging.c
 echo "userProgram END"
 echo "*********************************************************************"
 
